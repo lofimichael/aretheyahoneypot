@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aretheyahoneypot",
+  "main": "src/worker.ts",
+  "account_id": "cd63c8816b2761263e225efb099dfe5d",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "aretheyahoneypot.com", "custom_domain": true },
+    { "pattern": "www.aretheyahoneypot.com", "custom_domain": true }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aretheyahoneypot",
+      "database_id": "2dc347d3-8bd1-472f-a7ce-b2da2b44f361",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ratelimits": [
+    { "name": "SPIN_LIMITER", "namespace_id": "4207110", "simple": { "limit": 20, "period": 60 } }
+  ],
+  "vars": { "RELEASE_SHA": "development" },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true }
+  },
+  "send_metrics": false
+}
