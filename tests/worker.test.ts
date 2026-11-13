@@ -127,8 +127,8 @@ describe('helpers', () => {
     const prod = 'https://aretheyahoneypot.com';
     expect(isAllowedOrigin(null, prod)).toBe(true);
     expect(isAllowedOrigin(prod, prod)).toBe(true);
-    expect(isAllowedOrigin(prod, 'https://aretheyahoneypot.michael-cd6.workers.dev')).toBe(true);
-    expect(isAllowedOrigin('https://aretheyahoneypot.michael-cd6.workers.dev', 'https://aretheyahoneypot.michael-cd6.workers.dev')).toBe(true);
+    expect(isAllowedOrigin(prod, 'https://aretheyahoneypot.example.workers.dev')).toBe(true);
+    expect(isAllowedOrigin('https://aretheyahoneypot.example.workers.dev', 'https://aretheyahoneypot.example.workers.dev')).toBe(true);
     expect(isAllowedOrigin('http://localhost:8790', 'http://aretheyahoneypot.com')).toBe(true);
     expect(isAllowedOrigin('http://127.0.0.1:5173', prod)).toBe(true);
     expect(isAllowedOrigin('https://www.aretheyahoneypot.com', prod)).toBe(false);

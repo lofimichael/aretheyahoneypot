@@ -54,6 +54,7 @@ test('no flavor text claims the wheel itself is the authority', async ({ page })
   expect(strings).not.toMatch(/stop asking|go outside|double agent|act natural/i);
   await page.goto('/');
   await expect(page.locator('.sub, .hint')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Source on GitHub' })).toHaveAttribute('href', 'https://github.com/lofimichael/aretheyahoneypot');
 });
 
 test('a photo goes in, SPY comes out, and the photo never leaves the page', async ({ page }) => {

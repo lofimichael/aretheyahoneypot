@@ -21,4 +21,4 @@ npm run assets       # re-render public/og.png, apple-touch-icon.png and the tes
 
 ## Release
 
-Pushing to `main` runs CI; on success the deploy job runs `npm run deploy` (`scripts/release.mjs`): build, apply and verify remote D1 migrations, `wrangler deploy` with `RELEASE_SHA`, then poll `/api/health` until production reports that SHA. The job uses the scoped `CLOUDFLARE_API_TOKEN` repository secret and the `CLOUDFLARE_ACCOUNT_ID` variable.
+Pushing to `main` runs CI; on success the deploy job runs `npm run deploy` (`scripts/release.mjs`): build, apply and verify remote D1 migrations, `wrangler deploy` with `RELEASE_SHA`, then poll `/api/health` until production reports that SHA. The job uses the scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets.

@@ -14,7 +14,7 @@ const walk = (dir) => {
 walk(dist);
 if (!files.some((f) => f.endsWith('index.html'))) throw new Error('dist/index.html missing: run npm run build first');
 
-const allowedUrl = /^https?:\/\/(aretheyahoneypot\.com(\/|$)|www\.w3\.org\/)/;
+const allowedUrl = /^https?:\/\/(aretheyahoneypot\.com(\/|$)|www\.w3\.org\/|github\.com\/lofimichael\/aretheyahoneypot$)/;
 const banned = [/\bTODO\b/, /lorem ipsum/i, /\bbeta\b/i, /coming soon/i, /\bMVP\b/, /\bprototype\b/i, /early access/i];
 const problems = [];
 for (const file of files) {

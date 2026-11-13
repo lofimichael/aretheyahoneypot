@@ -391,6 +391,7 @@ body[data-state='verdict'] .agent-right { animation-delay: 450ms, 970ms; }
   font-size: 14px;
 }
 .footer p { margin: 2px 0; }
+.footer .source { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
 .counter { font-family: var(--display); font-size: 16px; }
 .counter[hidden] { display: none; }
 .counter b { font-weight: 400; display: inline-block; }
