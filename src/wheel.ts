@@ -2,7 +2,7 @@
 // "Local" angles are measured clockwise from 12 o'clock in the wheel's own frame.
 // A wheel rotated clockwise by `rotation` shows local angle mod(-rotation, 360) under the top pointer.
 
-export type SegmentKind = 'spy' | 'flavor' | 'fine';
+export type SegmentKind = 'spy' | 'fine';
 
 export interface Segment {
   label: string;
@@ -29,17 +29,20 @@ export const COLORS = {
   pink: '#FF8FC7',
 } as const;
 
+// Half the wheel looks reassuring. It never matters.
 export const SEGMENTS: Segment[] = [
-  { label: 'SPY', kind: 'spy', weight: 4, fill: COLORS.red, ink: COLORS.cream },
-  { label: 'ALSO SPY', kind: 'flavor', weight: 4, fill: COLORS.honey, ink: COLORS.ink },
-  { label: 'SPY', kind: 'spy', weight: 4, fill: COLORS.teal, ink: COLORS.ink },
-  { label: 'HOT SPY', kind: 'flavor', weight: 4, fill: COLORS.pink, ink: COLORS.ink },
-  { label: 'SPY', kind: 'spy', weight: 4, fill: COLORS.ink, ink: COLORS.honey },
-  { label: 'PROBABLY FINE', kind: 'fine', weight: 1.2, fill: COLORS.cream, ink: COLORS.ink },
-  { label: 'SPY', kind: 'spy', weight: 4, fill: COLORS.red, ink: COLORS.cream },
-  { label: 'DOUBLE AGENT', kind: 'flavor', weight: 4, fill: COLORS.honey, ink: COLORS.ink },
-  { label: 'SPY', kind: 'spy', weight: 4, fill: COLORS.teal, ink: COLORS.ink },
-  { label: 'VERY SPY', kind: 'flavor', weight: 4, fill: COLORS.pink, ink: COLORS.ink },
+  { label: 'SPY', kind: 'spy', weight: 1, fill: COLORS.red, ink: COLORS.cream },
+  { label: 'PROBABLY FINE', kind: 'fine', weight: 1, fill: COLORS.cream, ink: COLORS.ink },
+  { label: 'HOT SPY', kind: 'spy', weight: 1, fill: COLORS.pink, ink: COLORS.ink },
+  { label: 'NOT A SPY', kind: 'fine', weight: 1, fill: COLORS.teal, ink: COLORS.ink },
+  { label: 'SPY', kind: 'spy', weight: 1, fill: COLORS.ink, ink: COLORS.honey },
+  { label: 'TOTALLY NORMAL', kind: 'fine', weight: 1, fill: COLORS.honey, ink: COLORS.ink },
+  { label: 'SPY', kind: 'spy', weight: 1, fill: COLORS.red, ink: COLORS.cream },
+  { label: 'JUST A GUY', kind: 'fine', weight: 1, fill: COLORS.cream, ink: COLORS.ink },
+  { label: 'HOT SPY', kind: 'spy', weight: 1, fill: COLORS.pink, ink: COLORS.ink },
+  { label: 'INNOCENT', kind: 'fine', weight: 1, fill: COLORS.teal, ink: COLORS.ink },
+  { label: 'SPY', kind: 'spy', weight: 1, fill: COLORS.ink, ink: COLORS.honey },
+  { label: 'TRUST THEM', kind: 'fine', weight: 1, fill: COLORS.honey, ink: COLORS.ink },
 ];
 
 export function layout(segments: Segment[]): Wedge[] {
@@ -90,7 +93,7 @@ export function rotationAtOrBefore(local: number, max: number): number {
 export type Rng = () => number;
 
 export interface SpinPlan {
-  /** Rotation where the wheel pauses on "PROBABLY FINE" before creeping on, or null for a direct landing. */
+  /** Rotation where the wheel pauses on a reassuring wedge before creeping on, or null for a direct landing. */
   nearMiss: number | null;
   final: number;
   target: Wedge;
@@ -99,25 +102,32 @@ export interface SpinPlan {
 const spyWedges = (wedges: Wedge[]) => wedges.filter((w) => w.kind === 'spy');
 const interiorPoint = (w: Wedge, rng: Rng) => w.start + w.width * (EDGE_MARGIN + (1 - 2 * EDGE_MARGIN) * rng());
 
-/** The wedge the pointer enters right after leaving the "fine" sliver while spinning clockwise. */
-export function wedgeAfterFine(wedges: Wedge[] = WEDGES): Wedge {
-  const fine = wedges.find((w) => w.kind === 'fine');
-  if (!fine) throw new Error('Wheel has no near-miss sliver');
-  return wedges[mod(fine.index - 1, wedges.length)];
+/** The wedge the pointer enters right after leaving `wedge` while spinning clockwise. */
+export function wedgeAfter(wedge: Wedge, wedges: Wedge[] = WEDGES): Wedge {
+  return wedges[mod(wedge.index - 1, wedges.length)];
 }
 
-/** Plan an automatic clockwise spin that always ends inside a SPY wedge. */
-export function planSpin(current: number, rng: Rng, opts: { turns?: number; nearMissChance?: number } = {}): SpinPlan {
+/** "Fine" wedges whose clockwise exit leads straight into a spy wedge: the near-miss candidates. */
+export const NEAR_MISS_WEDGES: Wedge[] = WEDGES.filter((w) => w.kind === 'fine' && wedgeAfter(w).kind === 'spy');
+
+/** Plan an automatic clockwise spin that always ends inside a spy wedge. */
+export function planSpin(
+  current: number,
+  rng: Rng,
+  opts: { turns?: number; nearMissChance?: number; nearMissOn?: string } = {},
+): SpinPlan {
   const turns = opts.turns ?? 5 + rng() * 1.5;
   const minRotation = current + turns * 360;
-  const nearMissChance = opts.nearMissChance ?? 0.65;
-  const fine = WEDGES.find((w) => w.kind === 'fine');
-  const after = wedgeAfterFine();
+  const nearMissChance = opts.nearMissChance ?? 0.75;
+  const forced = opts.nearMissOn ? NEAR_MISS_WEDGES.find((w) => w.label === opts.nearMissOn) : undefined;
 
-  if (fine && after.kind === 'spy' && rng() < nearMissChance) {
-    const pauseLocal = fine.start + fine.width * (0.3 + 0.4 * rng());
-    // Moving clockwise, local angle decreases, so we enter `after` through its end edge.
-    const finalLocal = after.end - after.width * (EDGE_MARGIN + 0.25 * rng());
+  if (forced || (NEAR_MISS_WEDGES.length && rng() < nearMissChance)) {
+    const fine = forced ?? NEAR_MISS_WEDGES[Math.min(NEAR_MISS_WEDGES.length - 1, Math.floor(rng() * NEAR_MISS_WEDGES.length))];
+    const after = wedgeAfter(fine);
+    // Clockwise motion lowers the local angle, so the wheel leaves `fine` through its start edge
+    // and enters `after` through its end edge. Pause comfortably inside "fine", then creep over.
+    const pauseLocal = fine.start + fine.width * (EDGE_MARGIN + 0.2 * rng());
+    const finalLocal = after.end - after.width * (EDGE_MARGIN + 0.22 * rng());
     const nearMiss = rotationAtOrAfter(pauseLocal, minRotation);
     return { nearMiss, final: nearMiss + (pauseLocal - finalLocal), target: after };
   }
@@ -144,8 +154,8 @@ export function planFlick(current: number, velocity: number, rng: Rng): { final:
   return best!;
 }
 
-/** Peg positions (local angles): every wedge edge plus the middle of each full-size wedge. */
-export const PEGS: number[] = WEDGES.flatMap((w) => (w.kind === 'fine' ? [w.start] : [w.start, w.center]));
+/** Peg positions (local angles): every wedge edge plus the middle of each wedge. */
+export const PEGS: number[] = WEDGES.flatMap((w) => [w.start, w.center]);
 
 /** Monotonic count of peg crossings for a rotation; a change between frames means a tick. */
 export function pegCount(rotation: number, pegs: number[] = PEGS): number {

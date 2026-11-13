@@ -8,9 +8,11 @@ const polar = (r: number, deg: number): [string, string] => {
 };
 
 function labelSize(label: string): number {
-  if (label === 'SPY') return 40;
-  if (label === 'PROBABLY FINE') return 11.5;
-  return label.length > 10 ? 17 : 24;
+  if (label.length <= 3) return 40;
+  if (label.length <= 7) return 25;
+  if (label.length <= 10) return 19;
+  if (label.length <= 12) return 16;
+  return 14;
 }
 
 /** The wheel as an SVG string. Used by the page and by the share-image generator. */

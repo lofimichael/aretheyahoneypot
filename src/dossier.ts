@@ -11,6 +11,7 @@ export interface DossierInput {
   photo: HTMLImageElement | null;
   caseNumber: string;
   evidence: string[];
+  label: string;
 }
 
 async function fontsReady(): Promise<void> {
@@ -21,6 +22,25 @@ async function fontsReady(): Promise<void> {
       document.fonts.load('30px "Courier Prime"'),
     ]);
   } catch { /* fall back to system fonts */ }
+}
+
+/** Folder body (60..1000 x 120..1240) with a tab on its top-left edge, as a single path. */
+function folderPath(ctx: CanvasRenderingContext2D) {
+  const L = 60, T = 120, R = 1000, B = 1240, r = 34;
+  // tabL - tr must stay right of L + r so the outline never doubles back.
+  const tabL = 132, tabR = 540, tabT = 70, tr = 22;
+  ctx.beginPath();
+  ctx.moveTo(L, T + r);
+  ctx.arcTo(L, T, L + r, T, r);
+  ctx.lineTo(tabL - tr, T);
+  ctx.arcTo(tabL, T, tabL, T - tr, tr);
+  ctx.arcTo(tabL, tabT, tabL + tr, tabT, tr);
+  ctx.arcTo(tabR, tabT, tabR, tabT + tr, tr);
+  ctx.arcTo(tabR, T, tabR + tr, T, tr);
+  ctx.arcTo(R, T, R, T + r, r);
+  ctx.arcTo(R, B, R - r, B, r);
+  ctx.arcTo(L, B, L, B - r, r);
+  ctx.closePath();
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -106,30 +126,21 @@ export async function renderDossier(input: DossierInput): Promise<Blob> {
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
 
-  // Background and folder.
+  // Background and folder: one continuous outline, tab included, even stroke all round.
   ctx.fillStyle = HONEY;
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = INK;
-  roundRect(ctx, 70, 138, 940, 1120, 34);
-  ctx.fill();
+  folderPath(ctx);
   ctx.fillStyle = MANILA;
-  roundRect(ctx, 60, 120, 940, 1120, 34);
   ctx.fill();
   ctx.lineWidth = 6;
+  ctx.lineJoin = 'round';
   ctx.strokeStyle = INK;
   ctx.stroke();
-  // Folder tab.
-  ctx.fillStyle = MANILA;
-  roundRect(ctx, 100, 76, 330, 80, 20);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = MANILA;
-  ctx.fillRect(106, 118, 318, 40);
 
   ctx.fillStyle = INK;
   ctx.font = '700 30px "Courier Prime", monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('TOP SECRET', 130, 128);
+  ctx.fillText('WIA · TOP SECRET', 164, 112);
   ctx.textAlign = 'right';
   ctx.fillText(`CASE ${input.caseNumber}`, 960, 200);
 
@@ -141,8 +152,6 @@ export async function renderDossier(input: DossierInput): Promise<Blob> {
   ctx.save();
   ctx.translate(540, 650);
   ctx.rotate((-3 * Math.PI) / 180);
-  ctx.fillStyle = 'rgba(27,27,31,0.9)';
-  ctx.fillRect(-300 + 12, -280 + 14, 600, 640);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(-300, -280, 600, 640);
   ctx.strokeStyle = INK;
@@ -181,7 +190,7 @@ export async function renderDossier(input: DossierInput): Promise<Blob> {
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
   ctx.font = '700 30px "Courier Prime", monospace';
-  ctx.fillText('VERDICT: SPY  ·  CONFIDENCE: 100%', 110, 1080);
+  ctx.fillText(`VERDICT: ${input.label}  ·  CONFIDENCE: 100%`, 110, 1080);
   ctx.font = '28px "Courier Prime", monospace';
   // Whole items only: four lines fit inside the folder.
   let y = 1128;

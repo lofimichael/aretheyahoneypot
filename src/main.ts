@@ -5,13 +5,15 @@ import '@fontsource/courier-prime/700.css';
 import './styles.css';
 
 import { wheelSvg } from './wheel-svg';
-import { WEDGES, easeInOutCubic, easeInOutSine, easeOutQuart, pegCount, planFlick, planSpin } from './wheel';
+import { WEDGES, easeInOutCubic, easeOutQuart, pegCount, planFlick, planSpin, wedgeAt, type SpinPlan } from './wheel';
+import { agentSvg, velvetSvg } from './sprites';
+import { createRain, createTerminal } from './processing';
 import * as sound from './audio';
 import { burst } from './confetti';
 import { renderDossier } from './dossier';
 import {
-  ANALYSIS_LINES, EVIDENCE, FLICK_LINES, IDLE_CAPTION, NEAR_MISS, NEAR_MISS_RESOLVE, RATE_LIMITED,
-  SECOND_OPINIONS, UNDECODABLE, VERDICT_LINES, pick, sample,
+  ANALYSIS_LINES, EVIDENCE, FLICK_LINES, NEAR_MISS_RESOLVE, PROBABLY_FINE_OPINIONS, RATE_LIMITED,
+  SECOND_OPINIONS, UNDECODABLE, hesitate, pick, sample,
 } from './copy';
 
 type State = 'idle' | 'scanning' | 'spinning' | 'verdict';
@@ -24,7 +26,7 @@ const hubFace = el('hubFace');
 const hubPhoto = el<HTMLImageElement>('hubPhoto');
 const hubRedacted = el('hubRedacted');
 const disguise = el('disguise');
-const stamp = el<HTMLButtonElement>('stamp');
+const stamp = el('stamp');
 const caption = el('caption');
 const announce = el('announce');
 const actions = el('actions');
@@ -32,9 +34,9 @@ const uploadBtn = el<HTMLButtonElement>('upload');
 const fileInput = el<HTMLInputElement>('file');
 const verdictEl = el('verdict');
 const verdictTitle = el('verdictTitle');
-const verdictLine = el('verdictLine');
-const caseNoEl = el('caseNo');
-const evidenceEl = el('evidence');
+const verdictLabel = el('verdictLabel');
+const agentEl = el('agent');
+const agent2El = el('agent2');
 const againBtn = el<HTMLButtonElement>('again');
 const secondBtn = el<HTMLButtonElement>('second');
 const saveBtn = el<HTMLButtonElement>('save');
@@ -47,6 +49,8 @@ const wipeEl = el('wipe');
 // Shake the stage (inside .app's horizontal clip) so the page never gains sideways scroll.
 const stageEl = document.querySelector('.stage') as HTMLElement;
 const confettiCanvas = el<HTMLCanvasElement>('confetti');
+const rain = createRain(el<HTMLCanvasElement>('rain'));
+const terminal = createTerminal(el('terminal'));
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const reduced = () => reducedMotion.matches;
@@ -59,6 +63,7 @@ let photo: HTMLImageElement | null = null;
 let caseNumber = '';
 let evidence: string[] = [];
 let opinions = 0;
+
 let spies: number | null = null;
 
 function setState(next: State) {
@@ -66,9 +71,45 @@ function setState(next: State) {
   document.body.dataset.state = next;
 }
 
-function say(text: string) {
-  caption.textContent = text;
+/* ---------------- Kinetic flavor text ---------------- */
+
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const tokens = new WeakMap<HTMLElement, number>();
+
+/** Swap a line of text with letters that tumble in (and the old ones flying out). */
+function kinetic(target: HTMLElement, text: string) {
+  const token = (tokens.get(target) ?? 0) + 1;
+  tokens.set(target, token);
+  const render = () => {
+    if (tokens.get(target) !== token) return;
+    if (!text) {
+      target.replaceChildren();
+      return;
+    }
+    let i = 0;
+    const words = text.split(' ').map((word) => `<span class="w">${[...word].map((ch) => `<span class="k" style="--i:${i++}">${escapeHtml(ch)}</span>`).join('')}</span>`);
+    target.innerHTML = `<span class="sr-only">${escapeHtml(text)}</span><span class="kw" aria-hidden="true">${words.join(' ')}</span>`;
+  };
+  const current = target.querySelector('.kw');
+  if (current && !reduced()) {
+    current.classList.add('out');
+    setTimeout(render, 170);
+  } else {
+    render();
+  }
 }
+
+function say(text: string) {
+  kinetic(caption, text);
+}
+
+agentEl.innerHTML = agentSvg();
+agent2El.innerHTML = velvetSvg();
+const replay = (node: HTMLElement) => {
+  node.style.animation = 'none';
+  void node.offsetWidth;
+  node.style.animation = '';
+};
 
 /* ---------------- Wheel drawing ---------------- */
 
@@ -85,6 +126,9 @@ let lastVibrate = 0;
 
 interface Tween { from: number; to: number; start: number; duration: number; ease: (t: number) => number; resolve: () => void; silent: boolean; }
 let tween: Tween | null = null;
+/** While the WIA "processes", the wheel free-spins at this target speed (degrees per ms). */
+let freeSpin: { target: number } | null = null;
+let spinVelocity = 0;
 
 function setRotation(next: number, speed: number, silent: boolean) {
   rotation = next;
@@ -128,6 +172,9 @@ function frame(now: number) {
       tween = null;
       done();
     }
+  } else if (freeSpin) {
+    spinVelocity += (freeSpin.target - spinVelocity) * Math.min(1, dt / 450);
+    setRotation(rotation + spinVelocity * dt, spinVelocity, false);
   } else if (state === 'idle' && !dragging && !reduced() && !document.hidden) {
     setRotation(rotation + 0.012 * dt, 0, true);
   }
@@ -291,7 +338,6 @@ function clearSuspect() {
   hubRedacted.hidden = true;
   hubFace.hidden = false;
   disguise.classList.remove('on');
-  resetStampLetters();
 }
 
 async function showSuspect(file: File): Promise<boolean> {
@@ -323,24 +369,45 @@ function setWorking(working: boolean) {
   uploadBtn.innerHTML = working ? '<span aria-hidden="true">🔎</span> Investigating…' : '<span aria-hidden="true">📸</span> Upload a suspect';
 }
 
-async function spin(): Promise<void> {
-  const plan = planSpin(rotation, Math.random, { nearMissChance: reduced() ? 0 : 0.65 });
-  if (reduced()) {
-    await animateTo(plan.final, 1, easeOutQuart, true);
-    return;
-  }
+/** Start the processing theatre: free spin, glyph rain, typing terminal. */
+function startProcessing() {
+  const motion = !reduced();
+  terminal.start(!motion);
+  if (!motion) return;
+  rain.start();
   sound.whoosh();
-  await animateTo(rotation - 20, 340, easeInOutSine);
+  spinVelocity = 0;
+  freeSpin = { target: 1.15 };
+}
+
+function stopProcessing(label: string) {
+  rain.stop();
+  terminal.finish(label);
+}
+
+/**
+ * Bring the wheel to rest on a spy wedge, decelerating from whatever speed it is doing.
+ * `nearMissOn` forces the pause-on-a-reassuring-wedge gag on that wedge; otherwise it lands directly.
+ */
+async function land(nearMissOn?: string): Promise<SpinPlan> {
+  const motion = !reduced();
+  const plan = planSpin(rotation, Math.random, { turns: motion ? 3 : 1, nearMissChance: 0, nearMissOn });
+  wheelWrap.dataset.nearMiss = plan.nearMiss !== null ? wedgeAt(plan.nearMiss).label : '';
+  const velocity = Math.max(freeSpin ? spinVelocity : 0, 0.6);
+  freeSpin = null;
+  const firstStop = plan.nearMiss ?? plan.final;
+  // easeOutQuart starts at 4·distance/duration, so match the current speed for a seamless slowdown.
+  const duration = Math.min(6500, Math.max(3200, (4 * (firstStop - rotation)) / velocity));
+  await animateTo(firstStop, motion ? duration : 1, easeOutQuart, !motion);
   if (plan.nearMiss !== null) {
-    await animateTo(plan.nearMiss, 4300, easeOutQuart);
-    say(pick(NEAR_MISS));
+    say(hesitate(wedgeAt(plan.nearMiss).label));
     sound.creak();
-    await wait(800);
-    await animateTo(plan.final, 1150, easeInOutCubic);
-    say(NEAR_MISS_RESOLVE);
-  } else {
-    await animateTo(plan.final, 4900, easeOutQuart);
+    await wait(motion ? 950 : 700);
+    await animateTo(plan.final, motion ? 1150 : 1, easeInOutCubic, !motion);
+    say(pick(NEAR_MISS_RESOLVE));
+    await wait(motion ? 450 : 0);
   }
+  return plan;
 }
 
 async function investigate(file: File) {
@@ -352,25 +419,28 @@ async function investigate(file: File) {
   const verdict = requestVerdict();
   const decoded = await showSuspect(file);
   sound.blip();
+  startProcessing();
   if (!decoded) {
     say(UNDECODABLE);
-    await wait(reduced() ? 600 : 1400);
+    await wait(reduced() ? 600 : 1500);
   }
-  for (const line of sample(ANALYSIS_LINES, 3)) {
+  for (const line of sample(ANALYSIS_LINES, 4)) {
     say(line);
     sound.blip();
-    await wait(reduced() ? 450 : 850);
+    await wait(reduced() ? 400 : 1100);
   }
   setState('spinning');
-  await spin();
+  // The first verdict always lands straight on a spy wedge: no "probably fine" stall.
+  const plan = await land();
+  stopProcessing(plan.target.label);
   const result = await verdict;
   caseNumber = result.caseNumber;
   if (result.spies !== null) updateCounter(result.spies, true);
-  reveal(result.limited ? RATE_LIMITED : pick(VERDICT_LINES));
+  reveal(plan.target.label, result.limited ? RATE_LIMITED : '');
   setWorking(false);
 }
 
-function reveal(line: string) {
+function reveal(label: string, line: string) {
   const motion = !reduced();
   if (motion) {
     const box = wheelWrap.getBoundingClientRect();
@@ -406,17 +476,15 @@ function reveal(line: string) {
   }, motion ? 260 : 0);
   setTimeout(() => sound.sting(), motion ? 520 : 0);
 
-  caseNoEl.textContent = caseNumber;
-  verdictLine.textContent = line;
+  verdictLabel.textContent = label;
   evidence = sample(EVIDENCE, 3);
-  evidenceEl.replaceChildren(...evidence.map((t) => Object.assign(document.createElement('li'), { textContent: t })));
+  terminal.hide();
   actions.hidden = true;
   verdictEl.hidden = false;
-  stamp.tabIndex = 0;
-  stamp.setAttribute('aria-hidden', 'false');
-  stamp.setAttribute('aria-label', 'SPY stamp');
-  say('Psst. Tap the stamp.');
-  announce.textContent = `Verdict: SPY. Case ${caseNumber}. ${line}`;
+  replay(agentEl);
+  replay(agent2El);
+  say(line);
+  announce.textContent = `Verdict: ${label}. Case ${caseNumber}.${line ? ` ${line}` : ''}`;
   verdictTitle.focus({ preventScroll: true });
   const rect = verdictEl.getBoundingClientRect();
   if (rect.bottom > window.innerHeight) {
@@ -434,17 +502,15 @@ function leaveVerdict() {
   verdictEl.hidden = true;
   actions.hidden = false;
   announce.textContent = '';
-  stamp.tabIndex = -1;
-  stamp.setAttribute('aria-hidden', 'true');
-  resetStampLetters();
 }
 
 againBtn.addEventListener('click', () => {
   if (busy) return;
   leaveVerdict();
   clearSuspect();
+  terminal.hide();
   setState('idle');
-  say(IDLE_CAPTION);
+  say('');
   uploadBtn.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' });
   openPicker();
@@ -454,12 +520,24 @@ secondBtn.addEventListener('click', async () => {
   if (busy) return;
   setWorking(true);
   opinions += 1;
-  resetStampLetters();
+  // Every other second opinion stalls on PROBABLY FINE first.
+  const probablyFine = opinions % 2 === 1;
+  verdictEl.hidden = true;
+  actions.hidden = false;
+  setState('scanning');
+  startProcessing();
+  say('Escalating to the WIA…');
+  await wait(reduced() ? 300 : 1300);
+  say(pick(ANALYSIS_LINES));
+  await wait(reduced() ? 300 : 1100);
   setState('spinning');
-  say('Consulting the wheel again…');
-  await spin();
-  const line = SECOND_OPINIONS[Math.min(opinions - 1, SECOND_OPINIONS.length - 1)].replace('{n}', String(opinions + 1));
-  reveal(line);
+  const plan = await land(probablyFine ? 'PROBABLY FINE' : undefined);
+  stopProcessing(plan.target.label);
+  const round = Math.floor((opinions - 1) / 2);
+  const line = probablyFine
+    ? PROBABLY_FINE_OPINIONS[round % PROBABLY_FINE_OPINIONS.length]
+    : SECOND_OPINIONS[round % SECOND_OPINIONS.length].replace('{n}', String(opinions + 1));
+  reveal(plan.target.label, line);
   setWorking(false);
 });
 
@@ -469,7 +547,7 @@ saveBtn.addEventListener('click', async () => {
   const label = saveBtn.textContent;
   saveBtn.textContent = 'Printing…';
   try {
-    const blob = await renderDossier({ photo, caseNumber, evidence });
+    const blob = await renderDossier({ photo, caseNumber, evidence, label: verdictLabel.textContent || 'SPY' });
     const name = `dossier-${caseNumber}.png`;
     const file = new File([blob], name, { type: 'image/png' });
     const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -499,57 +577,13 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/* ---------------- Stamp easter egg ---------------- */
-
-let stampBroken = false;
-const stampLetters = () => Array.from(stamp.querySelectorAll('span')) as HTMLElement[];
-
-function resetStampLetters() {
-  stampBroken = false;
-  stampLetters().forEach((s) => s.getAnimations().forEach((a) => a.cancel()));
-}
-
-stamp.addEventListener('click', () => {
-  if (state !== 'verdict') return;
-  sound.unlock();
-  const letters = stampLetters();
-  if (!stampBroken) {
-    stampBroken = true;
-    sound.thud();
-    letters.forEach((s, i) => {
-      const x = (i - 1) * 60 + (Math.random() - 0.5) * 80;
-      const spinDeg = (Math.random() - 0.5) * 540;
-      s.animate(
-        [
-          { transform: 'translate(0,0) rotate(0)' },
-          { transform: `translate(${x * 0.5}px, -40px) rotate(${spinDeg * 0.3}deg)`, offset: 0.25 },
-          { transform: `translate(${x}px, ${window.innerHeight * 0.45}px) rotate(${spinDeg}deg)` },
-        ],
-        { duration: reduced() ? 1 : 900, easing: 'cubic-bezier(.3,.1,.7,1)', fill: 'forwards' },
-      );
-    });
-  } else {
-    stampBroken = false;
-    sound.blip();
-    letters.forEach((s) => {
-      const current = getComputedStyle(s).transform;
-      s.getAnimations().forEach((a) => a.cancel());
-      s.animate([{ transform: current === 'none' ? 'none' : current }, { transform: 'none' }], {
-        duration: reduced() ? 1 : 520,
-        easing: 'cubic-bezier(.34,1.56,.64,1)',
-      });
-    });
-    say('Reassembled. Still SPY.');
-  }
-});
-
 /* ---------------- Counter ---------------- */
 
 function updateCounter(value: number, animate: boolean) {
   const from = spies ?? value;
   spies = value;
   counterEl.hidden = false;
-  countLabel.textContent = value === 1 ? 'spy exposed so far' : 'spies exposed so far';
+  countLabel.textContent = value === 1 ? 'spy exposed' : 'spies exposed';
   if (!animate || reduced() || from === value) {
     countEl.textContent = value.toLocaleString();
     return;

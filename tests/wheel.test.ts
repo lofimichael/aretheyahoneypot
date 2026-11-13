@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EDGE_MARGIN, PEGS, WEDGES, pegCount, planFlick, planSpin, pointerAngle, positionInWedge,
-  rotationAtOrAfter, rotationAtOrBefore, wedgeAfterFine, wedgeAt,
+  EDGE_MARGIN, NEAR_MISS_WEDGES, PEGS, WEDGES, pegCount, planFlick, planSpin, pointerAngle, positionInWedge,
+  rotationAtOrAfter, rotationAtOrBefore, wedgeAfter, wedgeAt,
 } from '../src/wheel';
 
 // Small deterministic PRNG so failures are reproducible.
@@ -26,12 +26,14 @@ describe('wheel layout', () => {
     for (let i = 1; i < WEDGES.length; i++) expect(WEDGES[i].start).toBeCloseTo(WEDGES[i - 1].end, 9);
   });
 
-  it('has exactly one tiny "fine" sliver and plenty of SPY', () => {
-    const fine = WEDGES.filter((w) => w.kind === 'fine');
-    expect(fine).toHaveLength(1);
-    expect(fine[0].width).toBeLessThan(15);
-    expect(WEDGES.filter((w) => w.label === 'SPY').length).toBeGreaterThanOrEqual(4);
-    expect(WEDGES.filter((w) => w.kind === 'spy').every((w) => w.label === 'SPY')).toBe(true);
+  it('looks fair: reassuring and spy wedges split the wheel evenly and alternate', () => {
+    const area = (kind: string) => WEDGES.filter((w) => w.kind === kind).reduce((sum, w) => sum + w.width, 0);
+    expect(area('fine')).toBeCloseTo(180, 9);
+    expect(area('spy')).toBeCloseTo(180, 9);
+    for (const w of WEDGES) expect(wedgeAfter(w).kind).not.toBe(w.kind);
+    expect(WEDGES.some((w) => w.label === 'PROBABLY FINE' && w.kind === 'fine')).toBe(true);
+    expect(WEDGES.filter((w) => w.label === 'HOT SPY' && w.kind === 'spy').length).toBeGreaterThanOrEqual(2);
+    expect(NEAR_MISS_WEDGES.length).toBe(WEDGES.filter((w) => w.kind === 'fine').length);
   });
 
   it('maps rotation to the wedge under the pointer', () => {
@@ -56,60 +58,71 @@ describe('wheel layout', () => {
   });
 });
 
-describe('planSpin always lands on SPY', () => {
-  it('lands inside a SPY wedge interior for 20,000 random spins', () => {
+describe('planSpin always lands on a spy wedge', () => {
+  it('lands inside a spy wedge interior for 20,000 random spins', () => {
     const rng = mulberry32(42);
     for (let i = 0; i < 20000; i++) {
       const current = (rng() - 0.5) * 1e6;
       const plan = planSpin(current, rng);
-      expect(wedgeAt(plan.final).label).toBe('SPY');
+      expect(wedgeAt(plan.final).kind).toBe('spy');
       expect(wedgeAt(plan.final).index).toBe(plan.target.index);
       expect(interior(plan.final)).toBe(true);
       expect(plan.final - current).toBeGreaterThan(4 * 360);
     }
   });
 
-  it('near misses pause on PROBABLY FINE and then creep forward into SPY', () => {
+  it('near misses pause on a reassuring wedge and then creep forward into the next spy wedge', () => {
     const rng = mulberry32(7);
     for (let i = 0; i < 5000; i++) {
       const current = rng() * 1e5;
       const plan = planSpin(current, rng, { nearMissChance: 1 });
       expect(plan.nearMiss).not.toBeNull();
-      expect(wedgeAt(plan.nearMiss!).kind).toBe('fine');
+      const paused = wedgeAt(plan.nearMiss!);
+      expect(paused.kind).toBe('fine');
+      expect(interior(plan.nearMiss!)).toBe(true);
       expect(plan.final).toBeGreaterThan(plan.nearMiss!);
-      // The creep crosses only the remaining part of the sliver plus the margin of the next wedge.
-      expect(plan.final - plan.nearMiss!).toBeLessThan(WEDGES.find((w) => w.kind === 'fine')!.width + wedgeAfterFine().width);
-      expect(wedgeAt(plan.final).label).toBe('SPY');
+      expect(wedgeAt(plan.final).index).toBe(wedgeAfter(paused).index);
+      expect(plan.final - plan.nearMiss!).toBeLessThan(paused.width + wedgeAfter(paused).width);
       expect(interior(plan.final)).toBe(true);
     }
   });
 
-  it('direct landings never touch the sliver', () => {
+  it('can force the PROBABLY FINE joke', () => {
+    const rng = mulberry32(11);
+    for (let i = 0; i < 2000; i++) {
+      const plan = planSpin(rng() * 1e5, rng, { nearMissChance: 0, nearMissOn: 'PROBABLY FINE' });
+      expect(wedgeAt(plan.nearMiss!).label).toBe('PROBABLY FINE');
+      expect(wedgeAt(plan.final).kind).toBe('spy');
+    }
+  });
+
+  it('direct landings go straight to a spy wedge', () => {
     const rng = mulberry32(99);
     for (let i = 0; i < 5000; i++) {
       const plan = planSpin(rng() * 1e4, rng, { nearMissChance: 0 });
       expect(plan.nearMiss).toBeNull();
-      expect(wedgeAt(plan.final).label).toBe('SPY');
+      expect(wedgeAt(plan.final).kind).toBe('spy');
+      expect(interior(plan.final)).toBe(true);
     }
   });
 
   it('is robust to adversarial random values at the extremes', () => {
     for (const r of [0, 0.999999999, 0.5]) {
       const plan = planSpin(123.4, () => r);
-      expect(wedgeAt(plan.final).label).toBe('SPY');
+      expect(wedgeAt(plan.final).kind).toBe('spy');
       expect(interior(plan.final)).toBe(true);
     }
   });
 });
 
-describe('planFlick always lands on SPY in the flick direction', () => {
+describe('planFlick always lands on a spy wedge in the flick direction', () => {
   it('handles clockwise and counter-clockwise flicks of any speed', () => {
     const rng = mulberry32(2026);
     for (let i = 0; i < 20000; i++) {
       const current = (rng() - 0.5) * 1e5;
       const velocity = (rng() - 0.5) * 12;
       const plan = planFlick(current, velocity, rng);
-      expect(wedgeAt(plan.final).label).toBe('SPY');
+      expect(wedgeAt(plan.final).kind).toBe('spy');
       expect(interior(plan.final)).toBe(true);
       if (velocity < 0) expect(plan.final).toBeLessThan(current);
       else expect(plan.final).toBeGreaterThan(current);

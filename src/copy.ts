@@ -1,66 +1,68 @@
+// Voice: the Wheel Intelligence Agency (WIA) is the authority, never the wheel itself.
+
 export const ANALYSIS_LINES = [
   'Scanning for trench coats…',
   'Measuring cheekbones for state secrets…',
   'Cross-referencing LinkedIn endorsements…',
-  'Checking if they laugh at your jokes a little too hard…',
-  'Asking where they were on the night of the 14th…',
+  'Checking if they laugh at your jokes too hard…',
+  'Where were they on the night of the 14th?',
   'Enhancing… enhancing… enhancing…',
-  'Running the pixels past our guy…',
+  'Forwarding pixels to WIA headquarters…',
   'Counting suspiciously good angles…',
   'Checking for a second, secret phone…',
-  'Consulting the wheel…',
+  'WIA analysts are on it…',
 ];
 
-export const VERDICT_LINES = [
-  'Confidence: 100%. Margin of error: also spy.',
-  'Our analysts are unanimous. Our analysts are one wheel.',
-  'The wheel has spoken. The wheel is never wrong.',
-  'Do not let them know you know.',
-  'We ran it twice. Same answer.',
-  'Act natural. Delete nothing.',
-];
-
+/** Normal second opinions. `{n}` is the opinion number. */
 export const SECOND_OPINIONS = [
-  'Second opinion: spy.',
-  'Third opinion: spy. We are getting annoyed.',
-  'We asked a bigger wheel. It said spy.',
-  'The wheel would like you to stop asking.',
-  'Opinion number {n}: still a spy. Go outside.',
+  'Opinion #{n}: spy. The WIA double-checked.',
+  'WIA field office confirms: spy.',
+  'Opinion #{n}: still spy.',
+  'Fresh eyes at the WIA: spy.',
+];
+
+/** Second opinions that stall on PROBABLY FINE first (every other try). */
+export const PROBABLY_FINE_OPINIONS = [
+  'Probably fine was right there. Spy.',
+  'So close to probably fine. Spy.',
+  'Probably fine, said nobody at the WIA.',
 ];
 
 export const EVIDENCE = [
   'Has never once publicly denied being a spy.',
   'Looked directly at the camera. Classic.',
-  'Photographed. Innocent things are rarely photographed.',
+  'Photographed. Innocent things rarely are.',
   'Seems nice. That is how they get you.',
   'Pixel arrangement consistent with espionage.',
   'Suspiciously well lit.',
   'Owns at least one shadow.',
   'Too normal. Way too normal.',
   'Refused to comment.',
-  'Exactly what a spy would look like, if a spy looked like this.',
-  'Was within thirty feet of a Wi-Fi router.',
-  'Expression: unreadable. Like a spy.',
+  'Within thirty feet of a Wi-Fi router.',
+  'Expression: unreadable.',
   'Showed up in your camera roll uninvited.',
   'Knows things. Possibly everything.',
-  'Maintains steady eye contact with the void.',
   'Would absolutely laugh at your startup idea.',
-  'Has a very convenient alibi: being a photo.',
+  'Convenient alibi: being a photo.',
   'Fits in a little too well.',
 ];
 
-export const NEAR_MISS = ['Wait…', 'Hmm…', 'Hold on…'];
-export const NEAR_MISS_RESOLVE = '…nope. SPY.';
+export const NEAR_MISS_RESOLVE = ['…nope.', '…the WIA disagrees.', '…WIA says no.'];
 
 export const FLICK_LINES = [
-  'No suspect uploaded. The wheel suspects you.',
-  'You spun it with no photo. Bold. Also, spy.',
-  'The wheel has questions about you.',
+  'No photo? The WIA has opened a file on you.',
+  'Spun with no suspect. The WIA noticed.',
+  'Bold. The WIA is taking notes.',
 ];
 
 export const UNDECODABLE = 'So suspicious it won’t even open.';
-export const IDLE_CAPTION = 'Psst. You can flick the wheel.';
-export const RATE_LIMITED = 'Our servers are swamped with spies. Verdict stands anyway.';
+export const RATE_LIMITED = 'WIA servers are swamped with spies. Verdict stands.';
+
+/** "PROBABLY FINE" -> "Probably fine…?" */
+export function hesitate(label: string): string {
+  const lower = label.toLowerCase();
+  return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}…?`;
+}
 
 export function pick<T>(list: readonly T[], rng: () => number = Math.random): T {
   return list[Math.floor(rng() * list.length) % list.length];
