@@ -4,6 +4,7 @@ https://aretheyahoneypot.com — upload a photo of anyone (or anything) and a ca
 
 - The photo is handled only in the browser (object URL + canvas). The only API write is `POST /api/verdict` with no body, which bumps a real counter in D1.
 - `src/wheel.ts` holds the pure wheel geometry; `tests/wheel.test.ts` proves every planned spin and flick lands inside a `SPY` wedge.
+- The only third-party script is Cloudflare Web Analytics (cookieless, aggregate), which Cloudflare injects at the edge for this zone; the CSP allows exactly that origin.
 - Sounds are synthesized with WebAudio. The mute choice (`ath:muted` in localStorage) is the only browser storage.
 
 ## Develop

@@ -9,11 +9,12 @@ const APEX = 'aretheyahoneypot.com';
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // Cloudflare Web Analytics (cookieless, aggregate) is injected at the edge for this zone.
+  "script-src 'self' https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
-  "connect-src 'self' blob:",
+  "connect-src 'self' blob: https://cloudflareinsights.com",
   "media-src 'self' blob: data:",
   "object-src 'none'",
   "base-uri 'none'",

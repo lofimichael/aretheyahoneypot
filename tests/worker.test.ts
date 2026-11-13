@@ -109,6 +109,7 @@ describe('worker routing', () => {
     const csp = res.headers.get('Content-Security-Policy')!;
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("script-src 'self' https://static.cloudflareinsights.com");
     expect(csp).toContain('img-src \'self\' blob: data:');
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
     const api = await call(env, '/api/health');
