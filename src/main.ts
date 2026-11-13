@@ -44,7 +44,8 @@ const countEl = el('count');
 const countLabel = el('countLabel');
 const dropEl = el('drop');
 const wipeEl = el('wipe');
-const appEl = document.querySelector('.app') as HTMLElement;
+// Shake the stage (inside .app's horizontal clip) so the page never gains sideways scroll.
+const stageEl = document.querySelector('.stage') as HTMLElement;
 const confettiCanvas = el<HTMLCanvasElement>('confetti');
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -392,9 +393,9 @@ function reveal(line: string) {
   setTimeout(() => {
     sound.thud();
     if (motion) {
-      appEl.classList.remove('shake');
-      void appEl.offsetWidth;
-      appEl.classList.add('shake');
+      stageEl.classList.remove('shake');
+      void stageEl.offsetWidth;
+      stageEl.classList.add('shake');
       const box = wheelWrap.getBoundingClientRect();
       burst(confettiCanvas, box.left + box.width / 2, box.top + box.height / 2);
       if (!sound.isMuted() && 'vibrate' in navigator) {

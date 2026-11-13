@@ -426,7 +426,7 @@ body[data-state='verdict'] :focus-visible { outline-color: var(--honey); }
 
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 30; }
 
-.app.shake { animation: shake 360ms cubic-bezier(.36, .07, .19, .97) both; }
+.stage.shake { animation: shake 360ms cubic-bezier(.36, .07, .19, .97) both; }
 
 /* ---------- Keyframes ---------- */
 @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6%) rotate(4deg); } }

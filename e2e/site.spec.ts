@@ -29,6 +29,12 @@ async function landedLabel(page: Page): Promise<string> {
 }
 
 async function noHorizontalOverflow(page: Page) {
+  // Sample through the verdict shake as well as at rest.
+  for (let i = 0; i < 6; i++) {
+    const o = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(o).toBeLessThanOrEqual(0);
+    await page.waitForTimeout(60);
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 }
@@ -44,6 +50,7 @@ test('a photo goes in, SPY comes out, and the photo never leaves the page', asyn
   await expect(page.locator('body')).toHaveAttribute('data-state', 'scanning');
   await expect(page.locator('#upload')).toBeDisabled();
   await expect(page.locator('#verdictTitle')).toBeVisible({ timeout: 20_000 });
+  await noHorizontalOverflow(page);
   await expect(page.locator('#verdictTitle')).toHaveText('Verdict: SPY');
   await expect(page.locator('body')).toHaveAttribute('data-state', 'verdict');
   await expect(page.locator('#hubPhoto')).toBeVisible();
